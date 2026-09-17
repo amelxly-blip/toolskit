@@ -1,5 +1,6 @@
 /* =============================================
    ROLOX AUDIO UPLOADER - APPLICATION LOGIC
+   Uses backend proxy to avoid CORS issues
    ============================================= */
 
 // ===== STORAGE KEYS =====
@@ -180,11 +181,11 @@ function removeFromStorage(key) {
     localStorage.removeItem(key);
 }
 
-// ===== ROBLOX API FUNCTIONS =====
+// ===== API CALLS (via backend proxy) =====
 
-// Get user data from Roblox API
+// Get user data
 async function fetchRobloxUser(userId, apiKey) {
-    const response = await fetch(`https://apis.roblox.com/cloud/v2/users/${userId}`, {
+    const response = await fetch(`/api/user/${userId}`, {
         method: 'GET',
         headers: {
             'x-api-key': apiKey,
@@ -193,117 +194,60 @@ async function fetchRobloxUser(userId, apiKey) {
     });
     
     if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.details || errData.error || `User fetch failed (${response.status})`);
     }
     
     return response.json();
 }
 
-// Get user thumbnail/avatar from Roblox API
-async function fetchRobloxAvatar(userId, apiKey) {
-    // Try the thumbnails API
-    const response = await fetch(`https://apis.roblox.com/cloud/v2/users/${userId}/thumbnails`, {
-        method: 'GET',
-        headers: {
-            'x-api-key': apiKey,
+// Get user avatar
+async function fetchRobloxAvatar(userId) {
+    try {
+        const response = await fetch(`/api/avatar/${userId}`, {
+            method: 'GET',
             'Content-Type': 'application/json'
-        }
-    });
-    
-    if (!response.ok) {
-        // Fallback: use Roblox public avatar API (no key needed)
-        const fallbackResponse = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=png&isCircular=true`);
+        });
         
-        if (fallbackResponse.ok) {
-            const data = await fallbackResponse.json();
-            if (data.data && data.data.length > 0) {
-                return data.data[0].imageUrl;
-            }
+        if (response.ok) {
+            const data = await response.json();
+            return data.imageUrl;
         }
-        return null;
+    } catch (e) {
+        console.warn('Avatar fetch failed:', e);
     }
-    
-    const data = await response.json();
-    
-    // Try to extract image URL from response
-    if (data.thumbnails && data.thumbnails.length > 0) {
-        return data.thumbnails[0].imageUrl || data.thumbnails[0].imageUri;
-    } else if (data.data && data.data.length > 0) {
-        return data.data[0].imageUrl;
-    }
-    
-    // Fallback to public API
-    const fallbackResponse = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=png&isCircular=true`);
-    if (fallbackResponse.ok) {
-        const fbData = await fallbackResponse.json();
-        if (fbData.data && fbData.data.length > 0) {
-            return fbData.data[0].imageUrl;
-        }
-    }
-    
     return null;
 }
 
-// Get user info from public API (fallback)
-async function fetchRobloxUserPublic(userId) {
-    const response = await fetch(`https://users.roblox.com/v1/users/${userId}`);
-    
-    if (!response.ok) {
-        throw new Error(`User not found (ID: ${userId})`);
-    }
-    
-    return response.json();
-}
-
-// Upload audio to Roblox
+// Upload audio via backend
 async function uploadAudioToRoblox(file, name, description, groupId, apiKey, userId) {
-    // Step 1: Create the audio asset via Roblox Open Cloud API
-    const uploadUrl = groupId 
-        ? `https://apis.roblox.com/cloud/v2/groups/${groupId}/assets/audio`
-        : `https://apis.roblox.com/cloud/v2/users/${userId}/assets/audio`;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    formData.append('description', description || '');
     
-    // Read file as base64
-    const fileData = await readFileAsBase64(file);
-    
-    const body = {
-        asset: {
-            name: name,
-            description: description || '',
-            type: 'Audio'
-        },
-        fileContent: fileData
+    const headers = {
+        'x-api-key': apiKey,
+        'x-user-id': userId
     };
     
-    const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            'x-api-key': apiKey,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-    });
-    
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
+    if (groupId && groupId !== '0') {
+        headers['x-group-id'] = groupId;
     }
     
-    return response.json();
-}
-
-// Read file as base64
-function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-            // Remove data URL prefix
-            const base64 = reader.result.split(',')[1];
-            resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+    const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: headers,
+        body: formData
     });
+    
+    const data = await response.json().catch(() => ({}));
+    
+    if (!response.ok) {
+        throw new Error(data.details || data.error || `Upload failed (${response.status})`);
+    }
+    
+    return data;
 }
 
 // ===== CONNECT ACCOUNT =====
@@ -320,31 +264,8 @@ async function connectAccount(userId, apiKey) {
     showLoadingOverlay('Connecting to Roblox...');
     
     try {
-        // Try Open Cloud API first
-        let userData = null;
-        let avatarUrl = null;
-        
-        try {
-            userData = await fetchRobloxUser(userId, apiKey);
-            avatarUrl = await fetchRobloxAvatar(userId, apiKey);
-        } catch (apiError) {
-            console.warn('Open Cloud API failed, trying public API:', apiError);
-            // Fallback to public API
-            userData = await fetchRobloxUserPublic(userId);
-            
-            // Get avatar from public thumbnail API
-            try {
-                const thumbResponse = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=png&isCircular=true`);
-                if (thumbResponse.ok) {
-                    const thumbData = await thumbResponse.json();
-                    if (thumbData.data && thumbData.data.length > 0) {
-                        avatarUrl = thumbData.data[0].imageUrl;
-                    }
-                }
-            } catch (e) {
-                console.warn('Avatar fetch failed:', e);
-            }
-        }
+        const userData = await fetchRobloxUser(userId, apiKey);
+        const avatarUrl = await fetchRobloxAvatar(userId);
         
         if (!userData) {
             throw new Error('Failed to fetch user data');
@@ -406,7 +327,6 @@ function updateConnectedUI() {
     if (data.avatarUrl) {
         elements.userAvatar.src = data.avatarUrl;
         elements.userAvatar.onerror = function() {
-            // If avatar fails to load, hide it
             this.style.display = 'none';
         };
         elements.userAvatar.onload = function() {
@@ -501,7 +421,7 @@ function handleFileSelect(file) {
     }
     
     // Validate file size (20MB max)
-    const maxSize = 20 * 1024 * 1024; // 20MB
+    const maxSize = 20 * 1024 * 1024;
     if (file.size > maxSize) {
         showToast('File too large. Maximum size is 20MB.', 'error');
         return;
@@ -513,7 +433,7 @@ function handleFileSelect(file) {
     elements.fileName.textContent = file.name;
     elements.fileSize.textContent = formatFileSize(file.size);
     
-    // Auto-fill name from filename (without extension)
+    // Auto-fill name from filename
     const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
     elements.audioName.value = nameWithoutExt;
     
@@ -521,7 +441,6 @@ function handleFileSelect(file) {
     elements.uploadProgress.style.display = 'none';
     elements.uploadResult.style.display = 'none';
     
-    // Scroll to form
     elements.uploadForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -591,7 +510,7 @@ async function handleUpload() {
         elements.progressFill.style.width = '100%';
         
         // Show success result
-        const assetId = result.assetId || result.id || result.asset?.id || 'Unknown';
+        const assetId = result.assetId || result.id || result.asset?.id || result.path || 'Unknown';
         const assetPath = result.path || result.asset?.path || '';
         
         elements.uploadResult.className = 'upload-result success';
@@ -625,7 +544,6 @@ async function handleUpload() {
         
         showToast('Audio uploaded successfully!', 'success');
         
-        // Reset after delay
         setTimeout(() => {
             clearFileSelection();
         }, 2000);
@@ -634,13 +552,16 @@ async function handleUpload() {
         clearInterval(progressInterval);
         elements.uploadProgress.style.display = 'none';
         
-        let errorMsg = error.message;
+        let errorMsg = error.message || 'Unknown error';
+        
         if (errorMsg.includes('401') || errorMsg.includes('403')) {
-            errorMsg = 'Invalid API key or insufficient permissions. Please check your API key.';
+            errorMsg = 'Invalid API key or insufficient permissions. Please check your API key has Audio upload permissions.';
         } else if (errorMsg.includes('429')) {
             errorMsg = 'Rate limited. Please wait before uploading again.';
         } else if (errorMsg.includes('413')) {
             errorMsg = 'File too large for Roblox limits.';
+        } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
+            errorMsg = 'Cannot connect to server. Make sure the backend server is running (node server.js).';
         }
         
         elements.uploadResult.className = 'upload-result error';
@@ -659,7 +580,7 @@ async function handleUpload() {
         `;
         elements.uploadResult.style.display = 'block';
         
-        showToast('Upload failed: ' + (errorMsg.substring(0, 50)) + '...', 'error');
+        showToast('Upload failed', 'error');
         
     } finally {
         elements.submitUpload.disabled = false;
@@ -675,7 +596,6 @@ async function handleUpload() {
 // ===== RECENT UPLOADS =====
 function saveUploadRecord(record) {
     state.uploads.unshift(record);
-    // Keep only last 20 uploads
     if (state.uploads.length > 20) {
         state.uploads = state.uploads.slice(0, 20);
     }
@@ -727,7 +647,6 @@ function formatDate(dateString) {
 
 // ===== MODAL FUNCTIONS =====
 function openConnectModal() {
-    // Pre-fill if values exist
     if (state.userId) elements.modalUserId.value = state.userId;
     if (state.apiKey) elements.modalApiKey.value = state.apiKey;
     
@@ -750,7 +669,6 @@ function showModalError(message) {
 
 // ===== NAVIGATION =====
 function navigateToPage(pageName) {
-    // Update nav items
     elements.navItems.forEach(item => {
         item.classList.remove('active');
         if (item.dataset.page === pageName) {
@@ -758,7 +676,6 @@ function navigateToPage(pageName) {
         }
     });
     
-    // Update pages
     Object.keys(elements.pages).forEach(key => {
         elements.pages[key].style.display = 'none';
     });
@@ -767,7 +684,6 @@ function navigateToPage(pageName) {
         elements.pages[pageName].style.display = 'block';
     }
     
-    // Update title
     const titles = {
         upload: { title: 'Upload Audio', subtitle: 'Upload your audio files to Roblox' },
         library: { title: 'My Library', subtitle: 'Manage your uploaded audio files' },
@@ -779,7 +695,6 @@ function navigateToPage(pageName) {
         elements.pageSubtitle.textContent = titles[pageName].subtitle;
     }
     
-    // Close sidebar on mobile
     if (window.innerWidth <= 768) {
         elements.sidebar.classList.remove('open');
     }
@@ -788,14 +703,7 @@ function navigateToPage(pageName) {
 // ===== EVENT LISTENERS =====
 function initEventListeners() {
     // Connect button
-    elements.connectBtn.addEventListener('click', () => {
-        if (state.connected) {
-            // Already connected - show settings or allow reconnect
-            openConnectModal();
-        } else {
-            openConnectModal();
-        }
-    });
+    elements.connectBtn.addEventListener('click', openConnectModal);
     
     // Modal close
     elements.modalClose.addEventListener('click', closeConnectModal);
@@ -820,7 +728,6 @@ function initEventListeners() {
         const userId = elements.modalUserId.value.trim();
         const apiKey = elements.modalApiKey.value.trim();
         
-        // Validate
         if (!userId) {
             showModalError('Please enter your Roblox User ID');
             return;
@@ -834,7 +741,6 @@ function initEventListeners() {
             return;
         }
         
-        // Disable button
         elements.connectSubmit.disabled = true;
         elements.connectSubmit.innerHTML = '<div class="spinner"></div> Connecting...';
         elements.modalError.style.display = 'none';
@@ -843,7 +749,6 @@ function initEventListeners() {
             await connectAccount(userId, apiKey);
             closeConnectModal();
             
-            // Update settings page
             elements.settingsUserId.value = userId;
             elements.settingsApiKey.value = apiKey;
         } catch (error) {
@@ -996,7 +901,5 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     checkSavedSession();
-    
-    // Set initial page
     navigateToPage('upload');
 });
