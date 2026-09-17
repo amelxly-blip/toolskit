@@ -204,10 +204,7 @@ async function fetchRobloxUser(userId, apiKey) {
 // Get user avatar
 async function fetchRobloxAvatar(userId) {
     try {
-        const response = await fetch(`/api/avatar/${userId}`, {
-            method: 'GET',
-            'Content-Type': 'application/json'
-        });
+        const response = await fetch(`/api/avatar/${userId}`);
         
         if (response.ok) {
             const data = await response.json();
@@ -244,7 +241,8 @@ async function uploadAudioToRoblox(file, name, description, groupId, apiKey, use
     const data = await response.json().catch(() => ({}));
     
     if (!response.ok) {
-        throw new Error(data.details || data.error || `Upload failed (${response.status})`);
+        const errStr = typeof data.details === 'object' ? JSON.stringify(data.details) : (data.details || data.error || `Upload failed (${response.status})`);
+        throw new Error(errStr);
     }
     
     return data;
@@ -555,13 +553,13 @@ async function handleUpload() {
         let errorMsg = error.message || 'Unknown error';
         
         if (errorMsg.includes('401') || errorMsg.includes('403')) {
-            errorMsg = 'Invalid API key or insufficient permissions. Please check your API key has Audio upload permissions.';
+            errorMsg = 'Invalid API key or insufficient permissions. Please check your API key has Audio upload (Write) permission in Roblox Creator Dashboard.';
         } else if (errorMsg.includes('429')) {
             errorMsg = 'Rate limited. Please wait before uploading again.';
         } else if (errorMsg.includes('413')) {
             errorMsg = 'File too large for Roblox limits.';
         } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError')) {
-            errorMsg = 'Cannot connect to server. Make sure the backend server is running (node server.js).';
+            errorMsg = 'Cannot connect to server. The backend server might be down or not deployed correctly.';
         }
         
         elements.uploadResult.className = 'upload-result error';
@@ -575,7 +573,7 @@ async function handleUpload() {
                 <h3>Upload Failed</h3>
             </div>
             <div class="result-details">
-                <p>${errorMsg}</p>
+                <p style="word-break: break-word;">${errorMsg}</p>
             </div>
         `;
         elements.uploadResult.style.display = 'block';
