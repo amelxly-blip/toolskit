@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoLox Audio Uploader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <!-- Noise Texture Overlay -->
+    <div class="noise-overlay"></div>
+
+    <!-- Main Container -->
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                            <rect x="4" y="4" width="24" height="24" rx="8" stroke="white" stroke-width="2"/>
+                            <path d="M12 16h8M16 12v8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">ROLOX</span>
+                        <span class="logo-subtitle">Audio Uploader</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Profile Section -->
+            <div class="user-section" id="userSection">
+                <!-- Not Connected State -->
+                <div class="user-not-connected" id="notConnected">
+                    <div class="user-avatar-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                            <circle cx="24" cy="18" r="8" stroke="white" stroke-width="2" opacity="0.5"/>
+                            <path d="M10 40c0-8 6-14 14-14s14 6 14 14" stroke="white" stroke-width="2" opacity="0.5" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <p class="not-connected-text">Not Connected</p>
+                    <p class="not-connected-sub">Connect your Roblox account to start</p>
+                </div>
+
+                <!-- Connected State (hidden by default) -->
+                <div class="user-connected" id="userConnected" style="display:none;">
+                    <div class="user-avatar-wrapper">
+                        <img id="userAvatar" class="user-avatar" src="" alt="Avatar" />
+                        <div class="avatar-status"></div>
+                    </div>
+                    <div class="user-info">
+                        <h3 id="userDisplayName" class="user-displayname">Display Name</h3>
+                        <p id="userUsername" class="user-username">@username</p>
+                        <p id="userId" class="user-id">ID: 0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-page="upload">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 3v10m0-10L6 7m4-4l4 4M3 13v4a1 1 0 001 1h12a1 1 0 001-1v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Upload Audio</span>
+                </button>
+                <button class="nav-item" data-page="library">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <circle cx="15" cy="14" r="3" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    <span>My Library</span>
+                </button>
+                <button class="nav-item" data-page="settings">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 13a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M10 1v2m0 14v2m9-9h-2M3 10H1m15.07-6.07L14.5 4.5M5.5 14.5l-1.57 1.57m12.14 0L14.5 14.5M5.5 4.5L3.93 3.93" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span>Settings</span>
+                </button>
+            </nav>
+
+            <!-- Connection Status -->
+            <div class="sidebar-footer">
+                <div class="connection-status" id="connectionStatus">
+                    <div class="status-dot status-offline"></div>
+                    <span class="status-text">Disconnected</span>
+                </div>
+                <button class="disconnect-btn" id="disconnectBtn" style="display:none;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M6 2H3a1 1 0 00-1 1v10a1 1 0 001 1h3m4-12l4 4-4 4m4-4H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Toggle -->
+        <button class="mobile-toggle" id="mobileToggle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6h18M3 12h18M3 18h18" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </button>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <div class="topbar">
+                <div class="topbar-left">
+                    <h1 id="pageTitle">Upload Audio</h1>
+                    <p id="pageSubtitle">Upload your audio files to Roblox</p>
+                </div>
+                <div class="topbar-right">
+                    <button class="connect-btn" id="connectBtn">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                            <path d="M9 2v8m0-8L5 6m4-4l4 4M2 12v4h14v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Connect Account</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Page: Upload -->
+            <div class="page-content" id="page-upload">
+                <!-- Connection Required Banner -->
+                <div class="connect-banner" id="connectBanner">
+                    <div class="banner-icon">
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                            <rect x="8" y="8" width="24" height="24" rx="12" stroke="white" stroke-width="2" opacity="0.5"/>
+                            <path d="M16 20h8M20 16v8" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                        </svg>
+                    </div>
+                    <div class="banner-text">
+                        <h2>Connect Your Roblox Account</h2>
+                        <p>You need to connect your account with a valid API key and User ID before uploading audio.</p>
+                    </div>
+                    <button class="banner-btn" onclick="document.getElementById('connectBtn').click()">
+                        Connect Now
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 8h10m0 0L9 4m4 4L9 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Upload Area (hidden until connected) -->
+                <div class="upload-section" id="uploadSection" style="display:none;">
+                    <!-- Drop Zone -->
+                    <div class="dropzone" id="dropzone">
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+                                    <rect x="8" y="8" width="48" height="48" rx="12" stroke="white" stroke-width="2" opacity="0.3"/>
+                                    <path d="M24 30v-6a8 8 0 0116 0v6" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M32 24v16m0-16l-6 6m6-6l6 6M16 40v8a4 4 0 004 4h24a4 4 0 004-4v-8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <h2>Drop your audio file here</h2>
+                            <p>or click to browse from your computer</p>
+                            <p class="dropzone-formats">Supported: MP3, WAV, OGG, FLAC (Max 20MB)</p>
+                        </div>
+                        <input type="file" id="fileInput" accept="audio/*" style="display:none;" />
+                    </div>
+
+                    <!-- Upload Form (hidden until file selected) -->
+                    <div class="upload-form" id="uploadForm" style="display:none;">
+                        <div class="file-info-card">
+                            <div class="file-icon">
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                                    <rect x="6" y="4" width="20" height="24" rx="4" stroke="white" stroke-width="2"/>
+                                    <path d="M12 16h8M12 20h6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                    <path d="M16 8v4m-2-2h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="file-details">
+                                <p id="fileName" class="file-name">audiofile.mp3</p>
+                                <p id="fileSize" class="file-size">0 KB</p>
+                            </div>
+                            <button class="remove-file" id="removeFile">
+                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                    <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Audio Name</label>
+                            <input type="text" id="audioName" placeholder="Enter a name for your audio" />
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description (Optional)</label>
+                            <textarea id="audioDescription" placeholder="Add a description..." rows="3"></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Group ID (Optional)</label>
+                                <input type="text" id="groupId" placeholder="e.g. 1234567" />
+                            </div>
+                            <div class="form-group">
+                                <label>Visibility</label>
+                                <select id="visibility">
+                                    <option value="public">Public</option>
+                                    <option value="private">Private</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Upload Progress -->
+                        <div class="upload-progress" id="uploadProgress" style="display:none;">
+                            <div class="progress-header">
+                                <span class="progress-label">Uploading...</span>
+                                <span class="progress-percent" id="progressPercent">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Upload Result -->
+                        <div class="upload-result" id="uploadResult" style="display:none;">
+                            <!-- Dynamically populated -->
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn-secondary" id="cancelUpload">Cancel</button>
+                            <button class="btn-primary" id="submitUpload">
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                                    <path d="M9 2v10m0-10L5 6m4-4l4 4M2 14v2h14v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                Upload to Roblox
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Recent Uploads -->
+                    <div class="recent-uploads" id="recentUploads" style="display:none;">
+                        <h2>Recent Uploads</h2>
+                        <div class="uploads-list" id="uploadsList">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page: Library -->
+            <div class="page-content" id="page-library" style="display:none;">
+                <div class="empty-state">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                        <rect x="12" y="12" width="56" height="56" rx="14" stroke="white" stroke-width="2" opacity="0.3"/>
+                        <path d="M28 40h16M28 48h12" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+                        <circle cx="50" cy="44" r="8" stroke="white" stroke-width="2" opacity="0.3"/>
+                    </svg>
+                    <h2>Library Coming Soon</h2>
+                    <p>Your uploaded audio library will appear here</p>
+                </div>
+            </div>
+
+            <!-- Page: Settings -->
+            <div class="page-content" id="page-settings" style="display:none;">
+                <div class="settings-card">
+                    <h2>Account Settings</h2>
+                    <p class="settings-desc">Manage your Roblox connection settings</p>
+
+                    <div class="form-group">
+                        <label>Roblox User ID</label>
+                        <input type="text" id="settingsUserId" placeholder="Enter your Roblox User ID" />
+                        <p class="form-hint">Find your User ID in your Roblox profile URL</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>API Key (ROBLOX API)</label>
+                        <input type="password" id="settingsApiKey" placeholder="Paste your API key here" />
+                        <p class="form-hint">Generate an API key from Roblox Creator Dashboard</p>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button class="btn-secondary" id="clearData">Clear All Data</button>
+                        <button class="btn-primary" id="saveSettings">Save Settings</button>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h2>About</h2>
+                    <p class="settings-desc">RoLox Audio Uploader v1.0.0</p>
+                    <div class="about-info">
+                        <div class="about-row">
+                            <span>Version</span>
+                            <span>1.0.0</span>
+                        </div>
+                        <div class="about-row">
+                            <span>Storage</span>
+                            <span>Local Browser</span>
+                        </div>
+                        <div class="about-row">
+                            <span>API</span>
+                            <span>Roblox Open Cloud</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Connect Modal -->
+    <div class="modal-overlay" id="connectModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Connect Roblox Account</h2>
+                <button class="modal-close" id="modalClose">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="connect-steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <p>Enter your Roblox User ID</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <p>Enter your Roblox API Key</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <p>Click connect to verify & save</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Roblox User ID</label>
+                    <input type="text" id="modalUserId" placeholder="e.g. 1234567890" />
+                    <p class="form-hint">You can find this in your Roblox profile URL</p>
+                </div>
+
+                <div class="form-group">
+                    <label>Roblox API Key</label>
+                    <div class="api-key-wrapper">
+                        <input type="password" id="modalApiKey" placeholder="Paste your API key" />
+                        <button class="toggle-password" id="togglePassword">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" id="eyeIcon">
+                                <path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z" stroke="currentColor" stroke-width="1.5"/>
+                                <circle cx="10" cy="10" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="form-hint">Generate from Roblox Creator Dashboard → API Keys</p>
+                </div>
+
+                <div class="modal-error" id="modalError" style="display:none;">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M9 5v4m0 3v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span id="modalErrorText">Error message here</span>
+                </div>
+
+                <button class="btn-primary btn-full" id="connectSubmit">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                        <path d="M7 2L2 9l5 7M2 9h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Connect Account
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <div class="toast-icon" id="toastIcon"></div>
+        <span class="toast-message" id="toastMessage"></span>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
