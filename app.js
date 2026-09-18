@@ -667,6 +667,9 @@ function showModalError(message) {
 
 // ===== NAVIGATION =====
 function navigateToPage(pageName) {
+    // Skip kalau bukan halaman yang valid (misal tombol 'ai' buka panel bukan page)
+    if (!pageName || !elements.pages[pageName]) return;
+
     elements.navItems.forEach(item => {
         item.classList.remove('active');
         if (item.dataset.page === pageName) {
