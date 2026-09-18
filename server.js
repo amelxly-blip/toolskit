@@ -120,65 +120,95 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
     const { name, description } = req.body;
+    const assetName = name || req.file.originalname.replace(/\.[^/.]+$/, '');
 
     console.log(`[UPLOAD] User: ${userId}, File: ${req.file.originalname}, Size: ${req.file.size}`);
 
-    // Convert file to base64
-    const fileBase64 = req.file.buffer.toString('base64');
+    // ===== ROBLOX OPEN CLOUD ASSETS API =====
+    // Endpoint: POST https://apis.roblox.com/assets/v1/assets
+    // Format: multipart/form-data
+    //   - request: JSON string (metadata)
+    //   - fileContent: binary file
 
-    // Build request body for Roblox Open Cloud API v2
-    const body = {
-        asset: {
-            name: name || req.file.originalname,
-            description: description || '',
-            type: 'Audio'
-        },
-        fileContent: fileBase64
-    };
+    // Build creator object
+    const creator = groupId && groupId !== '0'
+        ? { groupId: groupId.toString() }
+        : { userId: userId.toString() };
 
-    // Build URL
-    const uploadUrl = groupId && groupId !== '0'
-        ? `https://apis.roblox.com/cloud/v2/groups/${groupId}/assets/audio`
-        : `https://apis.roblox.com/cloud/v2/users/${userId}/assets/audio`;
-
-    console.log(`[UPLOAD] URL: ${uploadUrl}`);
-
-    let result = await robloxFetch(uploadUrl, {
-        method: 'POST',
-        apiKey,
-        body: JSON.stringify(body)
+    const requestMetadata = JSON.stringify({
+        assetType: 'Audio',
+        displayName: assetName,
+        description: description || '',
+        creationContext: { creator }
     });
 
-    // If v2 fails, try v1 as fallback
-    if (!result.ok) {
-        console.log(`[UPLOAD] V2 failed (${result.status}), trying V1...`);
-        console.log(`[UPLOAD] V2 error:`, JSON.stringify(result.data));
+    // Build multipart/form-data manually using Blob/Buffer
+    const boundary = `----FormBoundary${Date.now()}`;
+    const CRLF = '\r\n';
 
-        const v1Body = {
-            name: name || req.file.originalname,
-            description: description || '',
-            fileContent: fileBase64
-        };
+    // Build form parts
+    const metadataPart =
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="request"${CRLF}` +
+        `Content-Type: application/json${CRLF}${CRLF}` +
+        requestMetadata + CRLF;
 
-        const v1Url = groupId && groupId !== '0'
-            ? `https://apis.roblox.com/cloud/v1/groups/${groupId}/assets`
-            : `https://apis.roblox.com/cloud/v1/users/${userId}/assets`;
+    const filePart =
+        `--${boundary}${CRLF}` +
+        `Content-Disposition: form-data; name="fileContent"; filename="${req.file.originalname}"${CRLF}` +
+        `Content-Type: ${req.file.mimetype}${CRLF}${CRLF}`;
 
-        result = await robloxFetch(v1Url, {
+    const closing = `${CRLF}--${boundary}--${CRLF}`;
+
+    const bodyBuffer = Buffer.concat([
+        Buffer.from(metadataPart, 'utf8'),
+        Buffer.from(filePart, 'utf8'),
+        req.file.buffer,
+        Buffer.from(closing, 'utf8')
+    ]);
+
+    console.log(`[UPLOAD] Sending to Roblox Assets API...`);
+    console.log(`[UPLOAD] Metadata:`, requestMetadata);
+
+    try {
+        const response = await fetchUrl('https://apis.roblox.com/assets/v1/assets', {
             method: 'POST',
-            apiKey,
-            body: JSON.stringify(v1Body)
+            headers: {
+                'x-api-key': apiKey,
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': bodyBuffer.length.toString()
+            },
+            body: bodyBuffer
         });
-    }
 
-    if (result.ok) {
-        console.log(`[UPLOAD] Success!`);
-        res.json(result.data);
-    } else {
-        console.error(`[UPLOAD] Error (${result.status}):`, JSON.stringify(result.data));
-        res.status(result.status).json({
-            error: 'Upload failed',
-            details: result.data
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch { data = { raw: text }; }
+
+        console.log(`[UPLOAD] Response ${response.status}:`, JSON.stringify(data));
+
+        if (response.ok) {
+            console.log(`[UPLOAD] Success! Asset ID: ${data.assetId || data.id || 'pending'}`);
+            res.json({
+                success: true,
+                assetId: data.assetId || data.id || null,
+                operationId: data.operationId || null,
+                name: assetName,
+                ...data
+            });
+        } else {
+            console.error(`[UPLOAD] Failed (${response.status}):`, JSON.stringify(data));
+            res.status(response.status).json({
+                error: 'Upload failed',
+                status: response.status,
+                details: data
+            });
+        }
+    } catch (err) {
+        console.error(`[UPLOAD] Network error:`, err.message);
+        res.status(500).json({
+            error: 'Network error',
+            details: err.message
         });
     }
 });

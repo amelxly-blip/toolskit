@@ -900,4 +900,140 @@ document.addEventListener('DOMContentLoaded', () => {
     initEventListeners();
     checkSavedSession();
     navigateToPage('upload');
+    initMchlernAI();
 });
+
+/* =============================================
+   MCHLERN AI — Panel Logic
+   ============================================= */
+
+// Ganti URL ini dengan URL 9Router kamu (Cloudflare Tunnel)
+const NINEROUTER_URL = 'http://localhost:20128';
+const AI_MODEL = 'claude-3-5-sonnet'; // model default dari 9Router/CodeBuddy
+
+let aiHistory = []; // simpan riwayat chat
+
+function initMchlernAI() {
+    const aiNavBtn  = document.querySelector('.nav-item-ai');
+    const aiPanel   = document.getElementById('aiPanel');
+    const aiBackdrop= document.getElementById('aiBackdrop');
+    const aiClose   = document.getElementById('aiPanelClose');
+    const aiInput   = document.getElementById('aiInput');
+    const aiSendBtn = document.getElementById('aiSendBtn');
+    const aiMessages= document.getElementById('aiMessages');
+    const aiStatus  = document.getElementById('aiStatus');
+
+    // Buka panel
+    aiNavBtn.addEventListener('click', () => {
+        aiPanel.classList.add('open');
+        aiBackdrop.classList.add('active');
+        aiNavBtn.classList.add('active');
+        setTimeout(() => aiInput.focus(), 350);
+    });
+
+    // Tutup panel
+    function closeAI() {
+        aiPanel.classList.remove('open');
+        aiBackdrop.classList.remove('active');
+        aiNavBtn.classList.remove('active');
+    }
+
+    aiClose.addEventListener('click', closeAI);
+    aiBackdrop.addEventListener('click', closeAI);
+
+    // Escape key tutup panel
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && aiPanel.classList.contains('open')) {
+            closeAI();
+        }
+    });
+
+    // Auto-resize textarea
+    aiInput.addEventListener('input', () => {
+        aiInput.style.height = 'auto';
+        aiInput.style.height = Math.min(aiInput.scrollHeight, 120) + 'px';
+    });
+
+    // Kirim dengan Enter (Shift+Enter = newline)
+    aiInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendAIMessage();
+        }
+    });
+
+    aiSendBtn.addEventListener('click', sendAIMessage);
+
+    // ===== FUNGSI KIRIM PESAN =====
+    async function sendAIMessage() {
+        const text = aiInput.value.trim();
+        if (!text) return;
+
+        // Tampil bubble user
+        appendMessage('user', text);
+        aiHistory.push({ role: 'user', content: text });
+        aiInput.value = '';
+        aiInput.style.height = 'auto';
+        aiSendBtn.disabled = true;
+
+        // Hapus welcome screen
+        const welcome = aiMessages.querySelector('.ai-welcome');
+        if (welcome) welcome.remove();
+
+        // Tampil typing indicator
+        aiStatus.style.display = 'flex';
+        aiMessages.scrollTop = aiMessages.scrollHeight;
+
+        try {
+            const response = await fetch(`${NINEROUTER_URL}/v1/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: AI_MODEL,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Kamu adalah MCHLERN AI, asisten cerdas yang tertanam di MellsToolkit — sebuah web app buat upload audio ke Roblox. Bantu user dengan pertanyaan seputar Roblox, audio, dan penggunaan web app ini. Jawab dengan santai dalam bahasa Indonesia.'
+                        },
+                        ...aiHistory
+                    ],
+                    max_tokens: 800
+                })
+            });
+
+            if (!response.ok) throw new Error(`Error ${response.status}`);
+
+            const data = await response.json();
+            const reply = data.choices?.[0]?.message?.content || 'Maaf, gak ada respons dari AI.';
+
+            aiHistory.push({ role: 'assistant', content: reply });
+            appendMessage('ai', reply);
+
+        } catch (err) {
+            console.error('[MCHLERN AI]', err);
+            appendMessage('ai', `⚠️ Gagal konek ke MCHLERN AI.\n\nPastikan 9Router udah jalan di ${NINEROUTER_URL}.\n\nError: ${err.message}`);
+        } finally {
+            aiStatus.style.display = 'none';
+            aiSendBtn.disabled = false;
+            aiMessages.scrollTop = aiMessages.scrollHeight;
+            aiInput.focus();
+        }
+    }
+
+    // ===== FUNGSI APPEND BUBBLE =====
+    function appendMessage(role, text) {
+        const msg = document.createElement('div');
+        msg.className = `ai-msg ${role}`;
+        msg.innerHTML = `<div class="ai-msg-bubble">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+        aiMessages.appendChild(msg);
+        aiMessages.scrollTop = aiMessages.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        return str
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+}
